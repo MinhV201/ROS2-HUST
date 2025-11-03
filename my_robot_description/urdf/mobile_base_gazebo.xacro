@@ -1,0 +1,153 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <gazebo reference="base_link">
+        <material>Gazebo/Blue</material>
+    </gazebo>
+
+    <gazebo reference="camera">
+        <material>Gazebo/Red</material>
+        <sensor name="camera_sensor" type="camera">
+            <pose>0 0 0 0 0 0</pose>
+            <visualize>true</visualize>
+            <update_rate>10.0</update_rate>
+            <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+                <frame_name>camera</frame_name>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+    <!--Add lidar sensor-->
+    <gazebo reference="lidar_link">
+        <sensor name="lidar" type="gpu_lidar">
+            <pose>0.1 0 0.05 0 0 0</pose>
+            <topic>lidar</topic>
+            <update_rate>10</update_rate>
+            <ray>
+                <scan>
+                    <horizontal>
+                        <samples>640</samples>
+                        <resolution>1</resolution>
+                        <min_angle>-1.396263</min_angle>
+                        <max_angle>1.396263</max_angle>
+                    </horizontal>
+                    <vertical>
+                        <samples>16</samples>
+                        <resolution>1</resolution>
+                        <min_angle>-0.261799</min_angle>
+                        <max_angle>0.261799</max_angle>
+                    </vertical>
+                </scan>
+                <range>
+                    <min>0.1</min>
+                    <max>10.0</max>
+                    <resolution>0.01</resolution>
+                </range>
+            </ray>
+            <always_on>1</always_on>
+            <visualize>true</visualize>
+        <gazebo_frame_id>lidar_link</gazebo_frame_id>
+        <plugin filename="libignition-gazebo-sensors-system.so"
+                name="ignition::gazebo::systems::Sensors">
+            <render_engine>ogre2</render_engine>
+        </plugin>
+        </sensor>
+    </gazebo>
+
+    
+    <gazebo>
+        
+        
+        <plugin filename="libignition-gazebo-diff-drive-system.so" 
+                name="ignition::gazebo::systems::DiffDrive" >
+
+            <!-- wheels -->
+            <left_joint>joint_4</left_joint>
+            <left_joint>joint_5</left_joint>
+            <right_joint>joint_2</right_joint>
+            <right_joint>joint_3</right_joint>
+            
+
+            <!-- kinematics -->
+            <wheel_separation>0.45</wheel_separation>
+            <wheel_radius>0.05</wheel_radius>
+
+            <!-- output -->
+            <!--odom_topic>odom</odom_topic-->
+            <!--frame_id>odom</frame_id-->
+            <!--child_frame_id>base_link</child_frame_id-->
+            <odom_publish_frequency>50</odom_publish_frequency>
+            <topic>cmd_vel</topic>
+            <odom_topic>odom</odom_topic>
+            <frame_id>odom</frame_id>
+            <child_frame_id>base_footprint</child_frame_id>
+        
+        </plugin>
+
+        
+    </gazebo>
+
+    <gazebo>
+        <plugin filename = "libignition-gazebo-odometry-publisher-system" 
+                name="ignition::gazebo::systems::OdometryPublisher">
+            <odom_publish_frequency>50</odom_publish_frequency>
+            <odom_topic>/odom</odom_topic>
+            <odom_frame>odom</odom_frame>
+            <robot_base_frame>base_footprint</robot_base_frame>
+            <tf_topic>/odom/tf</tf_topic>
+        </plugin>
+
+        <plugin filename="libignition-gazebo-joint-state-publisher-system.so" 
+                name="ignition::gazebo::systems::JointStatePublisher">
+            <topic>joint_states</topic>
+        </plugin>
+    </gazebo>
+
+    <gazebo>
+        <!-- Moving Forward-->
+        <plugin filename="libignition-gazebo-triggered-publisher-system.so"
+        name="ignition::gazebo::systems::TriggeredPublisher">
+            <input type="ignition.msgs.Int32" topic="/keyboard/keypress">
+                <match field="data">16777235</match>
+            </input>
+            <output type="ignition.msgs.Twist" topic="/cmd_vel">
+                linear: {x: -0.5}, angular: {z: 0.0}
+            </output>
+        </plugin>
+
+        <!-- Moving Backward-->
+        <plugin filename="libignition-gazebo-triggered-publisher-system.so"
+                name="ignition::gazebo::systems::TriggeredPublisher">
+            <input type="ignition.msgs.Int32" topic="/keyboard/keypress">
+                <match field="data">16777237</match>
+            </input>
+            <output type="ignition.msgs.Twist" topic="/cmd_vel">
+                linear: {x: 0.5}, angular: {z: 0.0}
+            </output>
+        </plugin>
+        <!--Moving Right-->
+        <plugin filename="libignition-gazebo-triggered-publisher-system.so"
+                name="ignition::gazebo::systems::TriggeredPublisher">
+            <input type="ignition.msgs.Int32" topic="/keyboard/keypress">
+                <match field="data">16777236</match>
+            </input>
+            <output type="ignition.msgs.Twist" topic="/cmd_vel">
+                linear: {y: -0.1}, angular: {z: 0.5}
+            </output>
+        </plugin>
+
+        <!--Moving Left-->
+        <plugin filename="libignition-gazebo-triggered-publisher-system.so"
+                name="ignition::gazebo::systems::TriggeredPublisher">
+            <input type="ignition.msgs.Int32" topic="/keyboard/keypress">
+                <match field="data">16777234</match>
+            </input>
+            <output type="ignition.msgs.Twist" topic="/cmd_vel">
+                linear: {y: -0.1}, angular: {z: -0.5}
+            </output>
+        </plugin>
+
+
+    </gazebo>
+
+</robot>
