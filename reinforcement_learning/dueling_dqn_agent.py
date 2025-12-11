@@ -90,7 +90,11 @@ class DuelingQAgent():
         self.counter = 0
         
         if self.mode == "test":
-            self.load_model = True
+            if self.load_episode != 0:
+                loaded_state_dict = torch.load(self.dirPath + str(self.load_episode)+'.pt')
+                
+            loaded_state_dict = torch.load(self.dirPath + 'best_model.pt')
+            self.Pred_model.load_state_dict(loaded_state_dict)
         
         # Switches between training on initial weights and weights loaded from the pre-trained episode
         if self.load_model:
@@ -138,6 +142,9 @@ class DuelingQAgent():
             target_param.data.copy_(1e-2*local_param.data + (1.0-1e-2)*target_param.data)
 
     def TrainModel(self):
+        if self.mode == "test":
+            return
+
         states, actions, rewards, next_states, dones = self.RAM.sample(self.batch_size)
         states = np.array(states).squeeze()
         next_states = np.array(next_states).squeeze()
