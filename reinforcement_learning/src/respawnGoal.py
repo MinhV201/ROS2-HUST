@@ -6,6 +6,7 @@ import subprocess
 import random
 import time
 import os
+import math
 from geometry_msgs.msg import Pose
 from src.ros_interface_module import RosHandler
 
@@ -13,12 +14,14 @@ class Respawn():
     def __init__(self, handle: RosHandler):
         self.model_path = os.path.expanduser('~/ros2_ws/src/reinforcement_learning/src/models/goal_box/goal.sdf')
         self.goal_position = Pose()
-        self.init_goal_x = -1.0  # random goal position
-        self.init_goal_y = 0.0
+        self.init_goal_x = 0.9  # random goal position
+        self.init_goal_y = 3.7
+        self.init_pose = 0.8
         # self.init_goal_x = 1.65  # fixed goal position
         # self.init_goal_y = 2.0
         self.goal_position.position.x = self.init_goal_x
         self.goal_position.position.y = self.init_goal_y
+        self.goal_theta = self.init_pose
         self.modelName = 'goal'
         self.obstacle_1 = 0.633707, 1.26704
         self.obstacle_2 = 0.938707, 0.967037
@@ -32,7 +35,7 @@ class Respawn():
         self.obstacle_10 = 2.93371, -0.000509
         self.obstacle_11 = -2.91629, -0.000509
         self.obstacle_12 = 0.008707, -2.92551
-        self.random_goal = True
+        self.random_goal = False
         # self.random_goal = False  # fixed goal
         self.last_goal_x = self.init_goal_x
         self.last_goal_y = self.init_goal_y
@@ -43,6 +46,7 @@ class Respawn():
         self.index = 0
 
         self.handler = handle
+        
 
     def checkModel(self, model):
         try:
@@ -51,7 +55,7 @@ class Respawn():
                 stderr=subprocess.STDOUT,
             ).decode("utf-8")
             if model in output:
-                self.handler.get_logger().info(f"Model '{model}' found via CLI.")
+                #self.handler.get_logger().info(f"Model '{model}' found via CLI.")
                 self.check_model = True
             else:
                 self.check_model = False
@@ -61,6 +65,8 @@ class Respawn():
 
     def respawnModel(self):
         self.checkModel(self.modelName)
+        qz = math.sin(self.goal_theta / 2.0)
+        qw = math.cos(self.goal_theta / 2.0)
         if not self.check_model:
             subprocess.run([
             "ros2", "run", "ros_gz_sim", "create",
@@ -69,9 +75,10 @@ class Respawn():
             "-file", self.model_path,          
             "-x", str(self.goal_position.position.x),       
             "-y", str(self.goal_position.position.y),       
-            "-z", "0.02"                   
+            "-z", "0.02",
+            "-Y", str(self.goal_theta)                   
             ])
-            self.handler.get_logger().info("Goal respawned at : %.1f, %.1f" % (self.goal_position.position.x, self.goal_position.position.y))
+            self.handler.get_logger().info(f"Goal created at: {self.goal_position.position.x:.2f}, {self.goal_position.position.y:.2f}, Yaw: {self.goal_theta:.2f}")
         else:
             cmd = [
             "ign", "service", "-s", "/world/small_maze/set_pose",
@@ -79,11 +86,11 @@ class Respawn():
             "--reptype", "ignition.msgs.Boolean",
             "--timeout", "2000",
             "--req", 
-            f'name: "{self.modelName}", position: {{x: {self.goal_position.position.x}, y: {self.goal_position.position.y}, z: {0.02}}}, orientation: {{w: 1.0}}'
+            f'name: "{self.modelName}", position: {{x: {self.goal_position.position.x}, y: {self.goal_position.position.y}, z: {0.02}}}, orientation: {{x: 0.0, y: 0.0, z: {qz}, w: {qw}}}'
             ]
             try:
                 subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
-                self.handler.get_logger().info("Goal position : %.1f, %.1f" % (self.goal_position.position.x, self.goal_position.position.y))
+                self.handler.get_logger().info(f"Goal moved to: {self.goal_position.position.x:.2f}, {self.goal_position.position.y:.2f}, Yaw: {self.goal_theta:.2f}")
             except subprocess.CalledProcessError:
                 self.handler.get_logger().error("Failed to move goal")
 
@@ -143,11 +150,15 @@ class Respawn():
                 self.goal_position.position.x = goal_x
                 self.goal_position.position.y = goal_y
 
+            self.goal_theta = random.uniform(-3.14, 3.14)
+        else:
+            self.goal_theta = self.init_pose    
+
         time.sleep(0.5)
         self.respawnModel()
 
         self.last_goal_x = self.goal_position.position.x
         self.last_goal_y = self.goal_position.position.y
 
-        return self.goal_position.position.x, self.goal_position.position.y
+        return self.goal_position.position.x, self.goal_position.position.y, self.goal_theta
     
