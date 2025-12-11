@@ -15,6 +15,7 @@ from dueling_dqn_agent import *
 from setup_config import *
 import csv
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 import threading
 from rclpy.executors import MultiThreadedExecutor
 from torch.utils.tensorboard import SummaryWriter
@@ -23,7 +24,10 @@ from torch.utils.tensorboard import SummaryWriter
 dirPath = os.path.dirname(os.path.realpath(__file__))
 LOG_DATA_DIR = dirPath + '/log_data'
 EPISODES = num_episodes    
-
+def is_goal_reached(x, y, theta, goal_x, goal_y, goal_theta, threshold1=0.30, threshold2=0.5):
+    angle_diff = theta - goal_theta
+    angle_err = np.arctan2(np.sin(angle_diff), np.cos(angle_diff))
+    return np.sqrt((x - goal_x) ** 2 + (y - goal_y) ** 2) <= threshold1 and (np.abs(angle_err) <= threshold2)
         
 def Training(ros_handler):
     writer = SummaryWriter(log_dir=LOG_DATA_DIR + '/runs')
@@ -69,6 +73,7 @@ def Training(ros_handler):
     position_log_file = open(LOG_DATA_DIR + '/robot_positions.csv', 'w', newline='') #NEWx3
     position_writer = csv.writer(position_log_file)
     position_writer.writerow(["Episode", "Step", "X", "Y", "Theta"])  # Ghi header
+    best_reward = -float('inf')
 
     for e in range(agent.load_episode + 1, EPISODES):
         text = '\r\n' + '_____ EPISODE: ' + str(e) + ' _____' + '\r\n'
@@ -82,7 +87,6 @@ def Training(ros_handler):
         if len(state.shape)==2:
             for step in range(agent.episode_step):
                 #print(f"Episode: {e} - Step: {step}", end='\r')
-                
                 action = agent.getAction(state)
                 
                 next_state, reward, done, counters = env.step(action)
@@ -91,6 +95,13 @@ def Training(ros_handler):
                 tf = ros_handler.tf
                 x, y, theta = env.getOdometry(odom, tf) # Giả sử hàm này trả về vị trí hiện tại của robot
                 position_writer.writerow([e, step, x, y, theta]) # NEWx2 
+                if is_goal_reached(x, y, theta, goal_x, goal_y, goal_pose):  # Hàm kiểm tra điều kiện đến đích
+                    ros_handler.get_logger().info("Goal reached!")
+                    reward += 100.0  # Phần thưởng khi đến đích chính
+                    env.goal_counters += 1
+                    done = True
+                    ros_handler.pub_cmd_vel.publish(Twist())
+                
                 done = np.bool_(done)
                
                 agent.RAM.add(state, action, reward, next_state, done)
@@ -129,7 +140,12 @@ def Training(ros_handler):
                     episodes.append(e)
                     m, s = divmod(int(time.time() - start_time), 60)
                     h, m = divmod(m, 60)
-
+                    
+                    if reward_per_episode > best_reward:
+                        best_reward = reward_per_episode
+                        torch.save(agent.Pred_model.state_dict(), agent.dirPath + 'best_model.pt')
+                        ros_handler.get_logger().info(f"!!! NEW BEST MODEL SAVED at Ep {e} with Reward {best_reward:.2f} !!!")
+                    
                     ros_handler.get_logger().info(f'Episode: {e} , Reward per episode: {reward_per_episode:.2f} , Memory: {agent.RAM.len} , Epsilon: {agent.epsilon:.4f} , Time: {h}:{m:02d}:{s:02d}')
                     text = text + 'Episode: %d , Reward per episode: %.2f , Memory: %d , Epsilon: %.4f , Time: %d:%02d:%02d \r\n'%\
                         (e, reward_per_episode, agent.RAM.len, agent.epsilon, h, m, s)
@@ -140,7 +156,7 @@ def Training(ros_handler):
                     param_values = [agent.epsilon]
                     param_dictionary = dict(zip(param_keys, param_values))
                     break
-
+                time.sleep(0.05)
                 global_step += 1    # step counting when the robot takes action for each iteration
                 if global_step % agent.target_update == 0:
                     ros_handler.get_logger().info("UPDATE TARGET NETWORK")
@@ -154,7 +170,9 @@ def Training(ros_handler):
         np.savetxt(LOG_DATA_DIR + '/steps_per_episode.csv', steps_per_episode, delimiter = ' , ')
         np.savetxt(LOG_DATA_DIR + '/reward_per_episode.csv', total_rewards, delimiter = ' , ')
         np.savetxt(LOG_DATA_DIR + '/goal_counters_per_episode.csv', goal_counters_array, delimiter = ' , ')
-    
+    # Save final best model    
+    torch.save(agent.Pred_model.state_dict(), agent.dirPath + 'last_model.pt')
+    ros_handler.get_logger().info("Training Finished. Saved last_model.pt")
     # Close the log file
     log_sim_info.close()
     position_log_file.close() # Newx1
