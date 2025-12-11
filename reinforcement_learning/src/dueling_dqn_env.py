@@ -16,10 +16,12 @@ from setup_config import *
 
 class Env():
     def __init__(self, action_size, handle: RosHandler):
-        self.init_x = init_x   #| init  
-        self.init_y = init_y   #| 
-        self.goal_x = goal_x   #| goal
-        self.goal_y = goal_y   #|
+        self.init_x = init_x        #| init  
+        self.init_y = init_y        #| 
+        self.init_pose = init_pose
+        self.goal_x = goal_x        #| goal
+        self.goal_y = goal_y        #|
+        self.goal_pose = goal_pose
         self.init_z = 0.1
         self.heading = 0
         self.action_size = action_size
@@ -51,12 +53,12 @@ class Env():
         self.original_sub_goals = [
             (-0.2288, 0.0494),
             (1.8688, 0.0494),
-            (1.5421, 1.9965),
-            (0.9210, 3.4790)
+            (1.5421, 1.9965)
+            #(0.9210, 3.4790)
         ]
         self.current_sub_goals = list(self.original_sub_goals)
         self.past_distance = 0.0
-        
+        self.respawn_goal = Respawn(handle)
 
 
     def getOdometry(self, odom, tf):
@@ -94,18 +96,24 @@ class Env():
         #print('Min range: ',min(scan_range))
         if min_range > min(scan_range) > 0:
             done = True
-        
+       
         return image , done
 
     def setReward(self, done, action):
         
-        # Tính khoảng cách hiện tại đến mục tiêu chính
+        goal_pose_err = self.current_theta - self.goal_pose
+        goal_pose_err = math.atan2(math.sin(goal_pose_err), math.cos(goal_pose_err))
         current_distance = math.sqrt((self.position.x - self.goal_x)**2 + (self.position.y - self.goal_y)**2)
-        reward = 0.0
-    
+        reward = -current_distance*0.1
+        if current_distance < 0.5:
+            r_pose = 1 - (abs(goal_pose_err)/math.pi)
+            reward += r_pose*0.5
+            reward -= 0.1*current_distance
+
         if done:
-            print('Current_distance: ', current_distance)
-            if current_distance <= 0.2:  # Ngưỡng để xác định đã đến đích chính
+            print('[Current_distance, Pose]: (%.2f, %.2f)' %(current_distance, self.current_theta))
+            
+            if current_distance <= 0.2 and abs(goal_pose_err) < 0.5:  # Ngưỡng để xác định đã đến đích chính
                 self.handler.get_logger().info("Goal reached!")
                 reward += 100.0  # Phần thưởng khi đến đích chính
                 self.goal_counters += 1
@@ -184,8 +192,8 @@ class Env():
         "--req", f'name: "my_robot", position: {{x: {-2.0}, y: {0}, z: 0.2}}, orientation: {{w: 1.0}}'
         
         ])
-        
-        print(f"[RESET] Goal position: ({self.goal_x}, {self.goal_y})")
+        self.goal_x, self.goal_y, self.goal_pose = self.respawn_goal.getPosition(position_check=False, delete=False)
+        #print(f"[RESET] Goal position: ({self.goal_x}, {self.goal_y})")
 
         
         time.sleep(0.5)
