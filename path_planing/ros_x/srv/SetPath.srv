@@ -1,0 +1,8 @@
+# Request
+PathSegment[] segments
+float64 lookahead_distance
+---
+# Response
+bool success              
+string message
+
