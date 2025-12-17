@@ -5,5 +5,6 @@ Dự án này triển khai thuật toán Line-of-Sight (LOS) kết hợp với b
 Hệ thống bao gồm tính năng sửa lỗi trượt bánh (Odom Drift) bằng cách sử dụng Ground Truth từ Gazebo và công cụ Visualize thời gian thực bằng Python/Matplotlib.
 
 📦 (Installation)
-
+cd ~/ros2_ws/src
+git clone https://github.com/MinhV201/ROS2-HUST.git
 
