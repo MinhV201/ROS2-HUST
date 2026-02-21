@@ -1,0 +1,8 @@
+pos:
+  init_x: -2.0
+  init_y: 0
+  goal_x: 0.9207
+  goal_y: 3.6728
+
+num_episodes: 2000
+replay_buffer_size: 60000
